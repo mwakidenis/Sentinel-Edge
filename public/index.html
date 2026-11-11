@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SentinelEdge | Autonomous Anomaly Detection</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #090D16;
+    --grid: #1E293B;
+    --cyan: #00F0FF;
+    --emerald: #10B981;
+    --amber: #F59E0B;
+    --text: #00F0FF;
+    --muted: rgba(0, 240, 255, 0.4);
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--cyan); font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+  header { height: 64px; border-bottom: 1px solid var(--grid); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; background: rgba(9, 13, 22, 0.8); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 30; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 32px; height: 32px; border: 1px solid var(--cyan); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--cyan); background: rgba(0, 240, 255, 0.1); }
+  .brand h1 { font-size: 16px; font-weight: bold; letter-spacing: 0.05em; }
+  .brand p { font-size: 11px; color: rgba(0, 240, 255, 0.5); margin-top: 2px; }
+  .status-chip { display: flex; align-items: center; gap: 8px; padding: 4px 12px; border: 1px solid var(--grid); border-radius: 20px; background: rgba(0, 240, 255, 0.05); font-size: 11px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 8px var(--emerald); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  main { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 16px; padding: 24px; height: calc(100vh - 64px); overflow: hidden; }
+  .cards { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card { background: rgba(9, 13, 22, 0.6); border: 1px solid var(--grid); border-radius: 12px; padding: 16px; backdrop-filter: blur(4px); display: flex; flex-direction: column; gap: 8px; }
+  .card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(0, 240, 255, 0.5); font-weight: bold; }
+  .card .value { font-size: 24px; font-weight: bold; font-family: 'Courier New', monospace; color: var(--cyan); }
+  .card .indicator { width: 10px; height: 10px; border-radius: 50%; }
+  .panel { background: rgba(9, 13, 22, 0.6); border: 1px solid var(--grid); border-radius: 12px; padding: 16px; backdrop-filter: blur(4px); display: flex; flex-direction: column; gap: 12px; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 14px; font-weight: bold; color: var(--cyan); }
+  .panel-sub { font-size: 11px; color: rgba(0, 240, 255, 0.5); font-family: 'Courier New', monospace; }
+  canvas { width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); border-radius: 8px; display: block; }
+  .controls { display: flex; flex-direction: column; gap: 10px; }
+  .btn { padding: 10px 16px; border: 1px solid var(--grid); border-radius: 8px; background: rgba(0, 240, 255, 0.08); color: var(--cyan); font-family: 'Courier New', monospace; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; text-align: left; }
+  .btn:hover { background: rgba(0, 240, 255, 0.2); border-color: var(--cyan); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn.thermal { border-color: rgba(245, 158, 11, 0.3); color: var(--amber); }
+  .btn.thermal:hover { background: rgba(245, 158, 11, 0.15); border-color: var(--amber); }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Courier New', monospace; }
+  th { text-align: left; color: rgba(0, 240, 255, 0.4); padding: 8px 4px; border-bottom: 1px solid var(--grid); }
+  td { padding: 8px 4px; border-bottom: 1px solid rgba(30, 41, 59, 0.3); color: var(--cyan); }
+  tr:hover { background: rgba(0, 240, 255, 0.03); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+  .tag-normal { background: rgba(16, 185, 129, 0.1); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+  .tag-critical { background: rgba(245, 158, 11, 0.1); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+  .tag-executed { background: rgba(0, 240, 255, 0.1); color: var(--cyan); border: 1px solid rgba(0, 240, 255, 0.3); }
+  .tag-completed { background: rgba(16, 185, 129, 0.1); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+  .log-scroll { overflow-y: auto; max-height: 300px; }
+  .offline-badge { font-size: 10px; color: var(--emerald); font-weight: bold; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-icon">⚡</div>
+    <div>
+      <h1>SentinelEdge</h1>
+      <p>Autonomous Anomaly Detection &amp; Self-Healing Stream Engine</p>
+    </div>
+  </div>
+  <div class="status-chip">
+    <div class="dot"></div>
+    <span>Edge Node Active · LOCAL / OFFLINE</span>
+  </div>
+</header>
+<main>
+  <div class="cards">
+    <div class="card">
+      <div class="label">Node Health</div>
+      <div class="value" id="nodeHealth">NORMAL</div>
+      <div class="indicator" id="healthIndicator" style="background: var(--emerald); box-shadow: 0 0 8px var(--emerald);"></div>
+    </div>
+    <div class="card">
+      <div class="label">Active Anomalies</div>
+      <div class="value" id="activeAnomalies">0</div>
+      <div class="indicator" id="anomalyIndicator" style="background: var(--emerald);"></div>
+    </div>
+    <div class="card">
+      <div class="label">Avg Eval Latency</div>
+      <div class="value" id="avgLatency">0.00 ms</div>
+      <div class="indicator" style="background: var(--cyan); box-shadow: 0 0 8px var(--cyan);"></div>
+    </div>
+    <div class="card">
+      <div class="label">Stream Window</div>
+      <div class="value" id="streamWindow">50 samples</div>
+      <div class="indicator" style="background: var(--cyan);"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="grid-column: 1 / span 1;">
+    <div class="panel-header">
+      <div class="panel-title">Live Telemetry Stream</div>
+      <div class="panel-sub">NDJSON @ 100ms</div>
+    </div>
+    <canvas id="streamCanvas"></canvas>
+    <div class="panel-sub" id="streamInfo">NODE-01 · temperature_c: --</div>
+  </div>
+
+  <div class="panel" style="grid-column: 2 / span 1;">
+    <div class="panel-header">
+      <div class="panel-title">Control Box</div>
+      <div class="panel-sub">Anomaly Injection</div>
+    </div>
+    <div class="controls">
+      <button class="btn thermal" id="btnThermal" onclick="injectThermal()">▶ Inject Thermal Spike</button>
+      <button class="btn" id="btnVibration" onclick="injectVibration()">▶ Inject Vibration Noise</button>
+      <button class="btn" id="btnReset" onclick="manualReset()">■ Manual Override / Reset</button>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 10px; color: rgba(0, 240, 255, 0.5); margin-top: 12px;">
+      <span>System: <span id="sysState" style="color: var(--emerald);">MONITORING</span></span>
+      <span>Mode: <span style="color: var(--emerald);">LOCAL</span></span>
+    </div>
+    <div class="offline-badge">Zero cloud dependencies · Local-first execution</div>
+  </div>
+
+  <div class="panel" style="grid-column: 1 / -1;">
+    <div class="panel-header">
+      <div class="panel-title">Autonomous Action Audit Log</div>
+      <div class="panel-sub">Ring buffer: 1,000 events</div>
+    </div>
+    <div class="log-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 60px;">Time</th>
+            <th style="width: 80px;">Node</th>
+            <th>Action</th>
+            <th style="width: 100px;">Metric</th>
+            <th style="width: 70px;">Conf.</th>
+            <th style="width: 90px;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="auditLogBody"></tbody>
+      </table>
+    </div>
+    <div style="font-size: 10px; color: rgba(0, 240, 255, 0.5); margin-top: 8px;">
+      Execution mode: LOCAL / OFFLINE &nbsp;|&nbsp; Zero cloud dependencies
+    </div>
+  </div>
+</main>
+
+<script>
+const CYAN = '#00F0FF';
+const EMERALD = '#10B981';
+const AMBER = '#F59E0B';
+
+const NODE_IDS = ['NODE-01', 'NODE-02', 'NODE-03', 'NODE-04'];
+const RANGES = {
+  vibration_hz: { min: 10, max: 100 },
+  temperature_c: { min: 30, max: 110 },
+  power_load_kw: { min: 1, max: 25 },
+  clock_drift_ms: { min: 0, max: 5 },
+};
+
+const WINDOW_SIZE = 50;
+const WARNING_Z = 2.5;
+const CRITICAL_Z = 3.2;
+
+function clamp(v, min, max) { return Math.min(Math.max(v, min), max); }
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randNode() { return NODE_IDS[Math.floor(Math.random() * NODE_IDS.length)]; }
+
+let isRunning = false;
+let anomalyType = 'NONE';
+let anomalyNodeId = 'NODE-01';
+let anomalyActive = false;
+let anomalyStartTime = 0;
+let intervalId = null;
+
+const windows = {};
+const history = [];
+const latencies = [];
+const auditLog = [];
+let activeAnomalies = 0;
+
+function computeStats(values) {
+  const n = values.length;
+  if (n === 0) return { count: 0, mean: 0, std_dev: 0, min: 0, max: 0 };
+  const sum = values.reduce((a, b) => a + b, 0);
+  const mean = sum / n;
+  if (n === 1) return { count: 1, mean, std_dev: 0, min: values[0], max: values[0] };
+  const variance = values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / (n - 1);
+  return { count: n, mean, std_dev: Math.sqrt(variance), min: Math.min(...values), max: Math.max(...values) };
+}
+
+function getWindow(nodeId) {
+  if (!windows[nodeId]) windows[nodeId] = { vibration_hz: [], temperature_c: [], power_load_kw: [], clock_drift_ms: [] };
+  return windows[nodeId];
+}
+
+function pushWindow(win, m) {
+  return {
+    vibration_hz: [...win.vibration_hz, m.vibration_hz].slice(-WINDOW_SIZE),
+    temperature_c: [...win.temperature_c, m.temperature_c].slice(-WINDOW_SIZE),
+    power_load_kw: [...win.power_load_kw, m.power_load_kw].slice(-WINDOW_SIZE),
+    clock_drift_ms: [...win.clock_drift_ms, m.clock_drift_ms].slice(-WINDOW_SIZE),
+  };
+}
+
+function zScore(val, stats) {
+  if (stats.std_dev === 0 || stats.count < 2) return 0;
+  return Math.abs(val - stats.mean) / stats.std_dev;
+}
+
+function classify(maxZ) {
+  if (maxZ > CRITICAL_Z) return 'CRITICAL';
+  if (maxZ > WARNING_Z) return 'WARNING';
+  return 'NORMAL';
+}
+
+function anomalyTypeFor(zScores) {
+  let maxMetric = '', maxZ = 0;
+  for (const [k, z] of Object.entries(zScores)) {
+    if (z > maxZ) { maxZ = z; maxMetric = k; }
+  }
+  if (maxZ <= WARNING_Z) return 'NONE';
+  if (maxMetric === 'temperature_c' || maxMetric === 'power_load_kw') return 'THERMAL_SPIKE';
+  return 'VIBRATION_SPIKE';
+}
+
+function evaluate(metric) {
+  const zScores = {};
+  for (const k of Object.keys(RANGES)) {
+    zScores[k] = zScore(metric[k], metric.stats[k]);
+  }
+  const maxZ = Math.max(...Object.values(zScores));
+  const classification = classify(maxZ);
+  const atype = anomalyTypeFor(zScores);
+  const confidence = Math.min(maxZ / CRITICAL_Z, 1);
+  return { classification, z_scores: zScores, confidence, anomaly_type: atype, maxZ };
+}
+
+const ACTION_TYPES = ['ACTION_THROTTLE_CPU', 'ACTION_REBALANCE_STREAM', 'ACTION_TRIP_CIRCUIT'];
+const ACTION_LABELS = {
+  ACTION_THROTTLE_CPU: 'Throttle CPU allocation',
+  ACTION_REBALANCE_STREAM: 'Rebalance telemetry stream',
+  ACTION_TRIP_CIRCUIT: 'Trip circuit breaker',
+};
+let sysState = 'NORMAL';
+let ringBuffer = [];
+let ringHead = 0;
+let ringCount = 0;
+
+function pushRing(entry) {
+  if (ringCount < 1000) { ringBuffer[ringCount] = entry; ringCount++; }
+  else { ringBuffer[ringHead] = entry; ringHead = (ringHead + 1) % 1000; }
+  renderAuditLog();
+}
+
+function remediate(nodeId, classification, confidence, metricSpike, timestamp) {
+  if (classification === 'CRITICAL' && sysState !== 'REMEDIATING') {
+    sysState = 'DEGRADED';
+    sysState = 'REMEDIATING';
+    const action = ACTION_TYPES[Math.floor(Math.random() * ACTION_TYPES.length)];
+    const entry = {
+      id: `a-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp, node_id: nodeId, classification: 'CRITICAL', action, confidence,
+    };
+    pushRing(entry);
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><code>${new Date(timestamp).toLocaleTimeString('en-US', { hour12: false })}</code></td>
+      <td><code>${nodeId}</code></td>
+      <td style="color: var(--amber);">${action.replace('ACTION_', '').replace(/_/g, ' ')}</td>
+      <td><code>${metricSpike}</code></td>
+      <td><code>${(confidence * 100).toFixed(0)}%</code></td>
+      <td><span class="tag tag-executed">EXECUTED</span></td>
+    `;
+    document.getElementById('auditLogBody').prepend(row);
+    activeAnomalies++;
+    updateDashboard();
+    return true;
+  }
+  if (classification === 'NORMAL' && sysState === 'REMEDIATING') {
+    sysState = 'STABILIZED';
+    const entry = { id: `e-${timestamp}`, timestamp, node_id: nodeId, classification: 'NORMAL', action: null, confidence };
+    pushRing(entry);
+    updateDashboard();
+  }
+  if (classification === 'NORMAL' && sysState === 'STABILIZED') {
+    sysState = 'NORMAL';
+    updateDashboard();
+  }
+  return false;
+}
+
+function manualReset() {
+  sysState = 'NORMAL';
+  const ts = Date.now();
+  const entry = { id: `mr-${ts}`, timestamp: ts, node_id: 'SYSTEM', classification: 'NORMAL', action: 'ACTION_MANUAL_RESET', confidence: 1 };
+  pushRing(entry);
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td><code>${new Date(ts).toLocaleTimeString('en-US', { hour12: false })}</code></td>
+    <td><code>SYSTEM</code></td>
+    <td style="color: var(--emerald);">Manual Override</td>
+    <td><code>Manual override</code></td>
+    <td><code>100%</code></td>
+    <td><span class="tag tag-completed">COMPLETED</span></td>
+  `;
+  document.getElementById('auditLogBody').prepend(row);
+  activeAnomalies = 0;
+  updateDashboard();
+}
+
+function updateDashboard() {
+  document.getElementById('nodeHealth').textContent = sysState;
+  const h = document.getElementById('healthIndicator');
+  h.style.background = sysState === 'NORMAL' ? EMERALD : sysState === 'REMEDIATING' ? CYAN : AMBER;
+  h.style.boxShadow = `0 0 8px ${h.style.background}`;
+  document.getElementById('activeAnomalies').textContent = activeAnomalies;
+  const ai = document.getElementById('anomalyIndicator');
+  ai.style.background = activeAnomalies > 0 ? AMBER : EMERALD;
+  document.getElementById('sysState').textContent = anomalyType === 'NONE' ? 'MONITORING' : 'ANOMALY ACTIVE';
+  document.getElementById('sysState').style.color = anomalyType === 'NONE' ? EMERALD : AMBER;
+
+  const avg = latencies.length ? (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2) : '0.00';
+  document.getElementById('avgLatency').textContent = avg + ' ms';
+  document.getElementById('streamWindow').textContent = WINDOW_SIZE + ' samples';
+}
+
+function emitMetric() {
+  const now = Date.now();
+  const nodeId = anomalyEnabled() && anomalyActive ? anomalyNodeId : randNode();
+  const isAnomaly = anomalyEnabled() && anomalyActive && nodeId === anomalyNodeId;
+
+  let vh = rand(RANGES.vibration_hz.min, RANGES.vibration_hz.max);
+  let tc = rand(RANGES.temperature_c.min, RANGES.temperature_c.max);
+  let pl = rand(RANGES.power_load_kw.min, RANGES.power_load_kw.max);
+  let cd = rand(RANGES.clock_drift_ms.min, RANGES.clock_drift_ms.max);
+
+  if (isAnomaly) {
+    const elapsed = now - anomalyStartTime;
+    const intensity = Math.min(elapsed / 3000, 1);
+    if (anomalyType === 'THERMAL_SPIKE') {
+      tc = clamp(rand(90, 110) * intensity + tc * (1 - intensity), 30, 110);
+      pl = clamp(rand(20, 25) * intensity + pl * (1 - intensity), 1, 25);
+    } else if (anomalyType === 'VIBRATION_SPIKE') {
+      vh = clamp(rand(80, 100) * intensity + vh * (1 - intensity), 10, 100);
+      cd = clamp(rand(3, 5) * intensity + cd * (1 - intensity), 0, 5);
+    }
+  }
+
+  const metric = {
+    timestamp: now, node_id: nodeId,
+    vibration_hz: Number(vh.toFixed(2)),
+    temperature_c: Number(tc.toFixed(2)),
+    power_load_kw: Number(pl.toFixed(2)),
+    clock_drift_ms: Number(cd.toFixed(2)),
+  };
+
+  const win = pushWindow(getWindow(nodeId), metric);
+  const stats = {};
+  for (const k of Object.keys(RANGES)) stats[k] = computeStats(win[k]);
+  metric.stats = stats;
+  windows[nodeId] = win;
+
+  const t0 = performance.now();
+  const result = evaluate(metric);
+  const t1 = performance.now();
+  latencies.push(t1 - t0);
+  if (latencies.length > 100) latencies.shift();
+
+  history.push(metric);
+  if (history.length > 300) history.shift();
+
+  remediate(nodeId, result.classification, result.confidence, Object.keys(RANGES).find(k => result.z_scores[k] === result.maxZ) || 'temperature_c', now);
+
+  document.getElementById('streamInfo').textContent = `${nodeId} · temperature_c: ${metric.temperature_c.toFixed(2)}°C`;
+  drawCanvas();
+  updateDashboard();
+}
+
+function anomalyEnabled() { return anomalyType !== 'NONE'; }
+
+function startEngine() {
+  if (isRunning) return;
+  isRunning = true;
+  anomalyType = 'NONE';
+  anomalyActive = false;
+  intervalId = setInterval(emitMetric, 80);
+  updateDashboard();
+}
+
+function stopEngine() {
+  isRunning = false;
+  if (intervalId) clearInterval(intervalId);
+  intervalId = null;
+}
+
+function injectThermal() {
+  isRunning = true;
+  anomalyType = 'THERMAL_SPIKE';
+  anomalyNodeId = 'NODE-01';
+  anomalyActive = true;
+  anomalyStartTime = Date.now();
+  if (!intervalId) intervalId = setInterval(emitMetric, 80);
+  updateDashboard();
+}
+
+function injectVibration() {
+  isRunning = true;
+  anomalyType = 'VIBRATION_SPIKE';
+  anomalyNodeId = 'NODE-02';
+  anomalyActive = true;
+  anomalyStartTime = Date.now();
+  if (!intervalId) intervalId = setInterval(emitMetric, 80);
+  updateDashboard();
+}
+
+function renderAuditLog() {
+  const tbody = document.getElementById('auditLogBody');
+  tbody.innerHTML = '';
+  const entries = ringCount < 1000 ? ringBuffer.slice(0, ringCount) : [...ringBuffer.slice(ringHead), ...ringBuffer.slice(0, ringHead)];
+  entries.slice(0, 30).reverse().forEach(e => {
+    const row = document.createElement('tr');
+    const actionText = e.action ? e.action.replace('ACTION_', '').replace(/_/g, ' ') : '—';
+    const actionColor = e.action ? 'var(--amber)' : 'var(--cyan)';
+    row.innerHTML = `
+      <td><code>${new Date(e.timestamp).toLocaleTimeString('en-US', { hour12: false })}</code></td>
+      <td><code>${e.node_id}</code></td>
+      <td style="color: ${actionColor};">${actionText}</td>
+      <td><code>${e.action ? 'auto' : '—'}</code></td>
+      <td><code>${(e.confidence * 100).toFixed(0)}%</code></td>
+      <td><span class="tag tag-${e.action ? 'executed' : 'normal'}">${e.action ? 'EXECUTED' : 'NORMAL'}</span></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+const canvas = document.getElementById('streamCanvas');
+const ctx = canvas.getContext('2d');
+function resizeCanvas() {
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight || 260;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let selectedMetric = 'temperature_c';
+
+function drawCanvas() {
+  const w = canvas.width, h = canvas.height;
+  const pad = 32;
+  const pw = w - pad * 2;
+  const ph = h - pad * 2;
+  ctx.clearRect(0, 0, w, h);
+
+  if (history.length === 0) return;
+
+  const vals = history.map(m => Number(m[selectedMetric]));
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  const range = mx - mn || 1;
+
+  ctx.strokeStyle = '#1E293B';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i <= 4; i++) {
+    const y = pad + (ph / 4) * i;
+    ctx.moveTo(pad, y); ctx.lineTo(pad + pw, y);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = CYAN;
+  ctx.shadowColor = CYAN;
+  ctx.shadowBlur = 10;
+  const step = pw / Math.max(history.length - 1, 1);
+  history.forEach((m, i) => {
+    const x = pad + i * step;
+    const y = pad + ph - ((Number(m[selectedMetric]) - mn) / range) * ph;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  if (history.length > 0) {
+    const last = history[history.length - 1];
+    const x = pad + (history.length - 1) * step;
+    const y = pad + ph - ((Number(last[selectedMetric]) - mn) / range) * ph;
+    ctx.fillStyle = AMBER;
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  const lastVal = history[history.length - 1][selectedMetric];
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px monospace';
+  const unit = selectedMetric === 'temperature_c' ? '°C' : selectedMetric === 'vibration_hz' ? 'Hz' : selectedMetric === 'power_load_kw' ? 'kW' : 'ms';
+  ctx.fillText(`${selectedMetric}: ${Number(lastVal).toFixed(2)} ${unit}`, pad, pad - 8);
+}
+
+setInterval(() => { activeAnomalies = 0; updateDashboard(); }, 5000);
+
+document.getElementById('btnThermal').onclick = () => { injectThermal(); };
+document.getElementById('btnVibration').onclick = () => { injectVibration(); };
+document.getElementById('btnReset').onclick = () => { manualReset(); };
+
+startEngine();
+</script>
+</body>
+</html>
