@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+:root {
+  --background: #090D16;
+  --foreground: #00F0FF;
+  --muted: #1E293B;
+  --accent-cyan: #00F0FF;
+  --accent-emerald: #10B981;
+  --accent-amber: #F59E0B;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent-cyan: var(--accent-cyan);
+  --color-accent-emerald: var(--accent-emerald);
+  --color-accent-amber: var(--accent-amber);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.grid-line {
+  stroke: #1E293B;
+}
+
+.neon-cyan {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.neon-emerald {
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+.scanline {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 240, 255, 0.02) 50%,
+    rgba(0, 0, 0, 0) 50%
+  );
+  background-size: 100% 4px;
+}
