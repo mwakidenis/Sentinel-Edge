@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+title: SentinelEdge
+message: >-
+  If you use this software, please cite it as below.
+authors:
+  - given-names: Denis
+    family-names: Mwakidenis
+    email: Mwakidenice@gmail.com
+    affiliation: SentinelEdge Project
+    orcid: https://orcid.org/0000-0000-0000-0000
+title: SentinelEdge - Autonomous Anomaly Detection and Self-Healing Stream Engine
+version: 1.0.0
+date-released: 2026-11-11
+doi: ""
+url: https://github.com/mwakidenis/Self-Healing-Autonomous-Anomaly-Detection
+type: software
+keywords:
+  - anomaly-detection
+  - self-healing
+  - edge-computing
+  - industrial-iot
+  - web-streams
+  - typescript
+  - nextjs
+identifiers:
+  - type: doi
+    value: ""
+repository-code: https://github.com/mwakidenis/Self-Healing-Autonomous-Anomaly-Detection
+license: MIT
+abstract: >-
+  SentinelEdge is a local-first, autonomous industrial anomaly detection and
+  self-healing stream engine built with native WHATWG Web Streams, a Z-Score
+  evaluator, a remediation state machine, and an enterprise dark-mode Next.js
+  dashboard. It runs entirely offline with zero external stream libraries and
+  sub-millisecond evaluation latency.
