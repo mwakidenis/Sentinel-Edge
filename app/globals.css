@@ -1,18 +1,5 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
-@theme {
-  --color-background: #090D16;
-  --color-foreground: #00F0FF;
-  --color-muted: #1E293B;
-  --color-accent-cyan: #00F0FF;
-  --color-accent-emerald: #10B981;
-  --color-accent-amber: #F59E0B;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 body {
   background: #090D16;
   color: #00F0FF;
